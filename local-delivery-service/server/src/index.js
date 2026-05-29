@@ -1,11 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import { initSchema } from './db.js';
+import { initSchema, cleanupIdempotencyKeys } from './db.js';
 import { availabilityRouter } from './routes/availability.js';
 import { ordersRouter } from './routes/orders.js';
 import { dcsRouter } from './routes/dcs.js';
 
 initSchema();
+cleanupIdempotencyKeys();
+setInterval(cleanupIdempotencyKeys, 60 * 60 * 1000).unref(); // hourly
 
 const app = express();
 app.use(cors());

@@ -6,6 +6,7 @@ import { availabilityCache } from '../services/cache.js';
 
 export const ordersRouter = Router();
 
+// ─── prepared statements ───────────────────────────────────────────────
 const insertOrder = db.prepare(
   'INSERT INTO orders (lat, lng, status) VALUES (?, ?, ?)'
 );
@@ -27,13 +28,22 @@ const getInventoryForItemInDcs = (dcCount) =>
       ORDER BY quantity DESC`
   );
 
-const getIdempotent = db.prepare(
-  'SELECT request_hash, status_code, response_body FROM idempotency_keys WHERE key = ?'
+// Idempotency statements
+const getIdemRow = db.prepare(
+  `SELECT status, request_hash, status_code, response_body
+     FROM idempotency_keys WHERE key = ?`
 );
-const insertIdempotent = db.prepare(
-  'INSERT INTO idempotency_keys (key, request_hash, status_code, response_body) VALUES (?, ?, ?, ?)'
+const claimIdemKey = db.prepare(
+  `INSERT INTO idempotency_keys (key, request_hash, status, expires_at)
+   VALUES (?, ?, 'pending', datetime('now', '+24 hours'))`
+);
+const finalizeIdemKey = db.prepare(
+  `UPDATE idempotency_keys
+      SET status = 'done', status_code = ?, response_body = ?
+    WHERE key = ?`
 );
 
+// ─── helpers ───────────────────────────────────────────────────────────
 function hashRequest(body) {
   // Canonicalize: sort items by itemId so {A,B} and {B,A} hash the same.
   const canonical = {
@@ -46,8 +56,54 @@ function hashRequest(body) {
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
+function replay(res, row) {
+  res.set('Idempotent-Replayed', 'true');
+  return res.status(row.status_code).json(JSON.parse(row.response_body));
+}
+
+// Try to do the order inside a SAVEPOINT so we can roll back the inventory
+// changes on INSUFFICIENT_STOCK while keeping the outer txn (and the
+// idempotency_keys row) intact.
+function attemptOrder({ lat, lng, items, dcIds }) {
+  db.exec('SAVEPOINT order_attempt');
+  try {
+    const allocations = [];
+    for (const { itemId, quantity } of items) {
+      let remaining = quantity;
+      const rows = getInventoryForItemInDcs(dcIds.length).all(itemId, ...dcIds);
+      for (const row of rows) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, row.quantity);
+        const info = decrementInventory.run(take, row.dc_id, itemId, take);
+        if (info.changes === 1) {
+          allocations.push({ itemId, dcId: row.dc_id, quantity: take });
+          remaining -= take;
+        }
+      }
+      if (remaining > 0) {
+        const err = new Error(`insufficient stock for item ${itemId}`);
+        err.code = 'INSUFFICIENT_STOCK';
+        err.itemId = itemId;
+        throw err;
+      }
+    }
+    const { lastInsertRowid: orderId } = insertOrder.run(lat, lng, 'placed');
+    for (const a of allocations) insertOrderItem.run(orderId, a.dcId, a.itemId, a.quantity);
+    db.exec('RELEASE order_attempt');
+    return { statusCode: 201, body: { status: 'placed', orderId, allocations } };
+  } catch (err) {
+    db.exec('ROLLBACK TO order_attempt');
+    db.exec('RELEASE order_attempt');
+    if (err.code === 'INSUFFICIENT_STOCK') {
+      return { statusCode: 409, body: { error: err.message, itemId: err.itemId } };
+    }
+    throw err;
+  }
+}
+
+// ─── route ─────────────────────────────────────────────────────────────
 // POST /api/orders  { lat, lng, items: [{itemId, quantity}] }
-// Optional header: Idempotency-Key  (UUID supplied by client per intent)
+// Optional header: Idempotency-Key
 ordersRouter.post('/', (req, res) => {
   const { lat, lng, items } = req.body || {};
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -64,85 +120,77 @@ ordersRouter.post('/', (req, res) => {
 
   const idempotencyKey = req.get('Idempotency-Key');
   const requestHash = idempotencyKey ? hashRequest({ lat, lng, items }) : null;
+
+  // Fast-path replay (no write lock): if the key already finished, return it.
   if (idempotencyKey) {
-    const existing = getIdempotent.get(idempotencyKey);
+    const existing = getIdemRow.get(idempotencyKey);
     if (existing) {
       if (existing.request_hash !== requestHash) {
-        return res.status(422).json({
-          error: 'Idempotency-Key reused with a different request body',
-        });
+        return res.status(422).json({ error: 'Idempotency-Key reused with a different request body' });
       }
-      // Replay the stored response — same key, same body → same result.
-      res.set('Idempotent-Replay', 'true');
-      return res.status(existing.status_code).json(JSON.parse(existing.response_body));
+      if (existing.status === 'done') return replay(res, existing);
+      // status === 'pending' → someone else is still processing the same key.
+      res.set('Retry-After', '1');
+      return res.status(409).json({ error: 'request in progress, retry shortly' });
     }
   }
 
   const dcs = nearbyDcs(lat, lng);
-  if (dcs.length === 0) {
-    return respond(res, 409, { error: 'no distribution centers in range' }, idempotencyKey, requestHash);
-  }
   const dcIds = dcs.map((d) => d.id);
 
-  // Atomic: BEGIN IMMEDIATE gives us a write lock; per-row decrements use a
-  // WHERE quantity >= ? guard so concurrent writers cannot oversell.
+  // One transaction does it all: claim key → do work → finalize key.
+  // If we crash anywhere in between, the whole thing rolls back, leaving NO
+  // pending row stranded — the next retry can claim the key cleanly.
   const txn = db.transaction(() => {
-    const allocations = []; // {itemId, dcId, quantity}
-    for (const { itemId, quantity } of items) {
-      let remaining = quantity;
-      const rows = getInventoryForItemInDcs(dcIds.length).all(itemId, ...dcIds);
-      for (const row of rows) {
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, row.quantity);
-        const info = decrementInventory.run(take, row.dc_id, itemId, take);
-        if (info.changes === 1) {
-          allocations.push({ itemId, dcId: row.dc_id, quantity: take });
-          remaining -= take;
+    // 1. Claim the key. PK constraint guarantees exactly one winner.
+    if (idempotencyKey) {
+      try {
+        claimIdemKey.run(idempotencyKey, requestHash);
+      } catch (e) {
+        // Lost the race to a concurrent retry with the same key.
+        const existing = getIdemRow.get(idempotencyKey);
+        if (existing?.status === 'done') {
+          if (existing.request_hash !== requestHash) {
+            return { statusCode: 422, body: { error: 'Idempotency-Key reused with a different request body' } };
+          }
+          return { replay: existing };
         }
-      }
-      if (remaining > 0) {
-        // throw aborts the transaction → rollback
-        const err = new Error(`insufficient stock for item ${itemId}`);
-        err.code = 'INSUFFICIENT_STOCK';
-        err.itemId = itemId;
-        throw err;
+        return { conflict: true };
       }
     }
-    const { lastInsertRowid: orderId } = insertOrder.run(lat, lng, 'placed');
-    for (const a of allocations) insertOrderItem.run(orderId, a.dcId, a.itemId, a.quantity);
-    return { orderId, allocations };
+
+    // 2. Handle "no DCs in range" as a deterministic 409 we can cache.
+    if (dcs.length === 0) {
+      const body = { error: 'no distribution centers in range' };
+      if (idempotencyKey) finalizeIdemKey.run(409, JSON.stringify(body), idempotencyKey);
+      return { statusCode: 409, body };
+    }
+
+    // 3. Try the order. SAVEPOINT lets us roll back inventory on stock errors
+    //    while keeping the idempotency_keys row.
+    const outcome = attemptOrder({ lat, lng, items, dcIds });
+
+    // 4. Save the response under the key so future retries replay it.
+    if (idempotencyKey) {
+      finalizeIdemKey.run(outcome.statusCode, JSON.stringify(outcome.body), idempotencyKey);
+    }
+    return outcome;
   });
 
   try {
     const result = txn.immediate();
-    availabilityCache.invalidate(); // reads were stale
-    return respond(res, 201, { status: 'placed', ...result }, idempotencyKey, requestHash);
-  } catch (err) {
-    if (err.code === 'INSUFFICIENT_STOCK') {
-      return respond(res, 409, { error: err.message, itemId: err.itemId }, idempotencyKey, requestHash);
+
+    if (result.replay) return replay(res, result.replay);
+    if (result.conflict) {
+      res.set('Retry-After', '1');
+      return res.status(409).json({ error: 'request in progress, retry shortly' });
     }
+    if (result.statusCode === 201) availabilityCache.invalidate();
+    return res.status(result.statusCode).json(result.body);
+  } catch (err) {
+    // Transient errors only — the txn rolled back, including the pending claim.
+    // Client is safe to retry with the same key.
     console.error(err);
     return res.status(500).json({ error: 'order failed' });
   }
 });
-
-// Persist the response under the idempotency key (if provided) and send it.
-// Note: only deterministic outcomes (success + business-rule rejections) are
-// stored. Transient 5xx errors are NOT recorded so the client can retry safely.
-function respond(res, statusCode, body, idempotencyKey, requestHash) {
-  if (idempotencyKey) {
-    try {
-      insertIdempotent.run(idempotencyKey, requestHash, statusCode, JSON.stringify(body));
-    } catch (e) {
-      // Race: another concurrent request with the same key beat us to insert.
-      // Replay the winner's stored response instead of double-processing.
-      const existing = getIdempotent.get(idempotencyKey);
-      if (existing) {
-        res.set('Idempotent-Replay', 'true');
-        return res.status(existing.status_code).json(JSON.parse(existing.response_body));
-      }
-      throw e;
-    }
-  }
-  return res.status(statusCode).json(body);
-}

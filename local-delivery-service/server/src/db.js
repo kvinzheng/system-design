@@ -53,9 +53,22 @@ export function initSchema() {
     CREATE TABLE IF NOT EXISTS idempotency_keys (
       key             TEXT PRIMARY KEY,
       request_hash    TEXT NOT NULL,
-      status_code     INTEGER NOT NULL,
-      response_body   TEXT NOT NULL,
-      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      status          TEXT NOT NULL CHECK (status IN ('pending','done')),
+      status_code     INTEGER,
+      response_body   TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at      TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_keys(expires_at);
   `);
+}
+
+// Production hygiene: purge keys past their TTL. Call on startup and on a timer.
+export function cleanupIdempotencyKeys() {
+  const info = db
+    .prepare(`DELETE FROM idempotency_keys WHERE expires_at < datetime('now')`)
+    .run();
+  if (info.changes > 0) console.log(`[lds] purged ${info.changes} expired idempotency key(s)`);
+  return info.changes;
 }
