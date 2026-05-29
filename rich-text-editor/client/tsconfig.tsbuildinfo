@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/editor/editor.tsx","./src/editor/slashmenu.tsx","./src/editor/toolbar.tsx","./src/editor/commands.ts","./src/editor/keymap.ts","./src/editor/sanitize.ts"],"version":"5.9.3"}

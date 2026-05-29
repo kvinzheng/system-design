@@ -1,11 +1,16 @@
 {
   "name": "fb-news-feed-backend",
   "version": "1.0.0",
-  "main": "src/app.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node src/app.js"
+    "start": "node src/server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "sequelize": "^6.37.8",
+    "socket.io": "^4.8.3",
+    "sqlite3": "^5.1.6"
   }
 }

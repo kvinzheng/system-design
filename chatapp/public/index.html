@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="login" class="login">
+    <h1>Chat</h1>
+    <label>Your username
+      <input id="me" placeholder="e.g. alice" autocomplete="off" />
+    </label>
+    <button id="enter">Enter</button>
+    <p class="hint">Open a second tab and sign in as a different user to chat.</p>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="me-bar">
+        <span>Signed in as <strong id="meLabel"></strong></span>
+        <span id="status" class="status offline">offline</span>
+      </div>
+      <div class="new-chat">
+        <input id="peerInput" placeholder="Chat with username…" autocomplete="off" />
+        <button id="openPeer">Open</button>
+      </div>
+      <ul id="conversations" class="conversations"></ul>
+    </aside>
+
+    <main class="main">
+      <header class="chat-header">
+        <span>Conversation with <strong id="peerLabel">—</strong></span>
+      </header>
+      <ol id="messages" class="messages"></ol>
+      <form id="composer" class="composer">
+        <input id="body" placeholder="Type a message…" autocomplete="off" disabled />
+        <button id="sendBtn" disabled>Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

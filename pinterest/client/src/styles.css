@@ -1,0 +1,251 @@
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #767676;
+  --brand: #e60023;
+  --card-bg: #f7f7f7;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.app__main {
+  padding: 16px;
+}
+
+.app__error {
+  text-align: center;
+  color: var(--brand);
+  padding: 16px;
+}
+
+.app__end {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 16px 64px;
+}
+
+/* ---------------- Header ---------------- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid #eee;
+}
+
+.header__logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.header__logo-mark {
+  background: var(--brand);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.header__logo-text {
+  font-size: 18px;
+}
+
+.header__nav {
+  display: flex;
+  gap: 4px;
+}
+
+.header__nav-btn {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.header__nav-btn:hover {
+  background: #f0f0f0;
+}
+
+.header__nav-btn--active {
+  background: #111;
+  color: white;
+}
+
+.header__nav-btn--active:hover {
+  background: #111;
+}
+
+.header__search {
+  flex: 1;
+}
+
+.header__search input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 24px;
+  border: none;
+  background: #efefef;
+  font-size: 14px;
+  outline: none;
+}
+
+.header__search input:focus {
+  background: #e4e4e4;
+}
+
+.header__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* ---------------- Masonry ---------------- */
+.masonry {
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.masonry__grid {
+  width: 100%;
+}
+
+.masonry__item {
+  /* transitions only the transform so resize feels smooth without
+     restyling every card. Disabled on initial paint via will-change. */
+  will-change: transform;
+}
+
+.masonry__sentinel {
+  height: 1px;
+}
+
+.masonry__loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--muted);
+}
+
+.masonry__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ddd;
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------------- Pin Card ---------------- */
+.pin {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.pin__image-wrap {
+  position: relative;
+  background: var(--card-bg);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.pin__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.pin__image-wrap:hover .pin__image {
+  transform: scale(1.02);
+}
+
+.pin__save {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  box-shadow: var(--shadow);
+}
+
+.pin__image-wrap:hover .pin__save {
+  opacity: 1;
+}
+
+.pin__save:hover {
+  background: #ad081b;
+}
+
+.pin__meta {
+  padding: 8px 4px 0;
+}
+
+.pin__title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pin__author {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}

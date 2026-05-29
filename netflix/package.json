@@ -1,0 +1,16 @@
+{
+  "name": "netflix-clone",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Full-stack Netflix-like video streaming app",
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "install:all": "npm install --workspaces --include-workspace-root",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
