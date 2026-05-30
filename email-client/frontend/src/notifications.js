@@ -11,6 +11,8 @@
 // produce 1–2 banners, not 12 stacked toasts.
 
 import { addBanner } from './notificationStack';
+import { isViewingFolder } from './uiContext';
+import { enqueueLow } from './lowDigest';
 
 const FLUSH_MS = 500;
 const HIGH_SOUND_DEBOUNCE_MS = 1500;
@@ -96,13 +98,20 @@ function flush() {
   // MEDIUM: every message flows into the single rolling banner. The stack
   // manager coalesces by the shared 'medium:rolling' group key, so 12
   // mediums = 1 toast with x12 count. One silent OS popup per burst.
-  for (const m of medium) {
-    addBanner({ priority: 'medium', message: m });
+  //
+  // BUT: if the user is actively viewing the inbox in a focused tab, the
+  // message is already visible as a list row — no toast is needed. This is
+  // the production rule "don't re-notify what the user is already seeing."
+  const inboxActive = isViewingFolder('inbox');
+  if (!inboxActive) {
+    for (const m of medium) {
+      addBanner({ priority: 'medium', message: m });
+    }
   }
-  if (medium.length === 1) {
+  if (medium.length === 1 && !inboxActive) {
     const m = medium[0];
     osNotify({ title: m.fromName || m.fromAddress, body: m.subject, tag: m.id, silent: true, openMessage: m });
-  } else if (medium.length > 1) {
+  } else if (medium.length > 1 && !inboxActive) {
     osNotify({
       title: `${medium.length} new messages`,
       body: medium.slice(0, 3).map((m) => m.subject).join(' · '),
@@ -111,7 +120,13 @@ function flush() {
       openMessage: medium[0],
     });
   }
-  // LOW: intentionally nothing. Badge already bumped above.
+
+  // LOW: never toast individually. Push into the hourly digest queue, which
+  // synthesizes one summary banner per window.
+  for (const m of low) {
+    enqueueLow(m);
+  }
+  // (Badge has already been bumped above for every tier including low.)
 }
 
 // Test seam — let App reset state on unmount in dev/HMR.

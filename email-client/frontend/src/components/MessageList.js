@@ -22,12 +22,19 @@ export default function MessageList({ items, selectedId, onSelect, loading }) {
       {!loading && items.length === 0 && <div style={styles.status}>No messages</div>}
       {items.map((m) => {
         const isSel = m.id === selectedId;
+        const isHighUnread = m.priority === 'high' && !m.read;
         return (
           <button key={m.id}
             onClick={() => onSelect(m)}
-            style={{ ...styles.row, ...(isSel ? styles.selected : {}), ...(m.read ? {} : styles.unread) }}>
+            style={{
+              ...styles.row,
+              ...(isHighUnread ? styles.high : {}),
+              ...(m.read ? {} : styles.unread),
+              ...(isSel ? styles.selected : {}),
+            }}>
             <div style={styles.rowTop}>
               <span style={styles.from}>
+                {isHighUnread && <span title="Pinned" style={{ marginRight: 4 }}>📌</span>}
                 {priorityDot(m.priority)}
                 {m.fromName || m.fromAddress}
               </span>
@@ -48,6 +55,7 @@ const styles = {
   row: { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', borderBottom: '1px solid #f3f4f6', background: 'transparent', cursor: 'pointer' },
   selected: { background: '#e0eaff' },
   unread: { background: '#f5faff' },
+  high: { background: '#fef2f2', borderLeft: '3px solid #dc2626' },
   rowTop: { display: 'flex', justifyContent: 'space-between', fontSize: 13 },
   from: { fontWeight: 600 },
   time: { color: '#6b7280', fontSize: 12 },

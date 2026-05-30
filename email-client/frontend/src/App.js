@@ -4,6 +4,7 @@ import { socket } from './socket';
 import { getOutbox, flushOutbox } from './outbox';
 import { ensureNotificationPermission, notifyNewMail } from './notifications';
 import { subscribe as subscribeStack, dismissBanner, clearOverflow, pauseAging, resumeAging } from './notificationStack';
+import { setActiveFolder } from './uiContext';
 import Composer from './components/Composer';
 import MessageList from './components/MessageList';
 import Reader from './components/Reader';
@@ -67,6 +68,9 @@ export default function App() {
   };
 
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [folder, q]);
+
+  // Tell the notification subsystem which folder is currently active.
+  useEffect(() => { setActiveFolder(folder); }, [folder]);
 
   // Unread count
   useEffect(() => {
@@ -149,6 +153,14 @@ export default function App() {
     if (isOnline()) { flushOutbox(); reload(); }
   };
 
+  // Inbox view: pin high-priority unread to top, then chronological.
+  const displayMessages = useMemo(() => {
+    if (folder !== 'inbox') return messages;
+    const pinned = messages.filter((m) => m.priority === 'high' && !m.read);
+    const rest = messages.filter((m) => !(m.priority === 'high' && !m.read));
+    return [...pinned, ...rest];
+  }, [messages, folder]);
+
   const folderCounts = useMemo(() => ({
     inbox: unread,
     outbox: outboxCount,
@@ -199,7 +211,7 @@ export default function App() {
 
       <div style={styles.body}>
         <Sidebar folders={FOLDERS} active={folder} counts={folderCounts} onSelect={setFolder} />
-        <MessageList items={messages} selectedId={selected?.id} onSelect={onSelect} loading={loading} />
+        <MessageList items={displayMessages} selectedId={selected?.id} onSelect={onSelect} loading={loading} />
         <Reader message={selected} onDelete={onDelete} onReply={(m) => { setComposing({ to: m.fromAddress, subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`, body: `\n\n---\nOn ${new Date(m.receivedAt).toLocaleString()}, ${m.fromAddress} wrote:\n> ${(m.body||'').replace(/\n/g, '\n> ')}` }); }} />
       </div>
 
