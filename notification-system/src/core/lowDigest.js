@@ -6,7 +6,7 @@
 //
 // Window is configurable. Demo apps typically use 30-60s; production: 1h.
 
-import { addBanner } from './stack';
+import { addBanner } from './stack.js';
 
 let windowMs = 60_000; // default 1 minute (demo-friendly)
 let queue = [];

@@ -18,7 +18,7 @@
 //   { id, priority, title, body, count, persistent, requiresAction,
 //     groupKey, surface, onOpen, summary, meta, lastTs, paused, ttlRemaining }
 
-import { getPrefs, densityCap, isInQuietHours, subscribePrefs } from './prefs';
+import { getPrefs, densityCap, isInQuietHours, subscribePrefs } from './prefs.js';
 
 const TTL_MS = { high: Infinity, medium: 5000, low: 0 };
 const BANNER_HEIGHT_PX = 64;

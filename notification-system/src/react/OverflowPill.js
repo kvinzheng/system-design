@@ -1,37 +1,31 @@
 import React, { useState } from 'react';
+const h = React.createElement;
 
-// Collapsed pill that expands into a drawer of evicted/aged banners.
-// Generic — uses banner.title / banner.body only.
 export default function OverflowPill({ items, onOpen, onDismiss, onClearAll }) {
   const [open, setOpen] = useState(false);
   if (!items.length) return null;
 
-  return (
-    <div style={styles.wrap}>
-      <button style={styles.pill} onClick={() => setOpen((v) => !v)}>
-        <span>{'↓'} {items.length} more notification{items.length === 1 ? '' : 's'}</span>
-        <span style={styles.caret}>{open ? '▴' : '▾'}</span>
-      </button>
-
-      {open && (
-        <div style={styles.drawer}>
-          {items.map((b) => (
-            <div key={b.id} style={styles.row}>
-              <span style={styles.dot(b.priority)} />
-              <div style={styles.body}>
-                <div style={styles.title}>{b.title}{b.count > 1 ? ` ×${b.count}` : ''}</div>
-                {b.body && <div style={styles.subj}>{b.body}</div>}
-              </div>
-              {b.onOpen && <button style={styles.link} onClick={() => { b.onOpen(); onOpen && onOpen(b); }}>Open</button>}
-              <button style={styles.x} onClick={() => onDismiss(b.id)} aria-label="Dismiss">{'✕'}</button>
-            </div>
-          ))}
-          <div style={styles.footer}>
-            <button style={styles.clearAll} onClick={onClearAll}>Clear all</button>
-          </div>
-        </div>
-      )}
-    </div>
+  return h('div', { style: styles.wrap },
+    h('button', { style: styles.pill, onClick: () => setOpen((v) => !v) },
+      h('span', null, `\u2193 ${items.length} more notification${items.length === 1 ? '' : 's'}`),
+      h('span', { style: styles.caret }, open ? '\u25b4' : '\u25be'),
+    ),
+    open ? h('div', { style: styles.drawer },
+      ...items.map((b) =>
+        h('div', { key: b.id, style: styles.row },
+          h('span', { style: styles.dot(b.priority) }),
+          h('div', { style: styles.body },
+            h('div', { style: styles.title }, `${b.title}${b.count > 1 ? ` \u00d7${b.count}` : ''}`),
+            b.body ? h('div', { style: styles.subj }, b.body) : null,
+          ),
+          b.onOpen ? h('button', { style: styles.link, onClick: () => { b.onOpen(); onOpen && onOpen(b); } }, 'Open') : null,
+          h('button', { style: styles.x, onClick: () => onDismiss(b.id), 'aria-label': 'Dismiss' }, '\u2715'),
+        )
+      ),
+      h('div', { style: styles.footer },
+        h('button', { style: styles.clearAll, onClick: onClearAll }, 'Clear all'),
+      ),
+    ) : null,
   );
 }
 

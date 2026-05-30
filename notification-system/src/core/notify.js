@@ -15,10 +15,10 @@
 // Bursts are flushed every 500ms so 12 items arriving back-to-back produce
 // 1-2 banners, not 12 stacked toasts.
 
-import { addBanner } from './stack';
-import { isViewingSurface } from './uiContext';
-import { enqueueLow } from './lowDigest';
-import { osNotify, playBlip } from './osBridge';
+import { addBanner } from './stack.js';
+import { isViewingSurface } from './uiContext.js';
+import { enqueueLow } from './lowDigest.js';
+import { osNotify, playBlip } from './osBridge.js';
 
 const FLUSH_MS = 500;
 

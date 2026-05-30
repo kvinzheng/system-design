@@ -1,9 +1,9 @@
 // Single configure() that wires up every core knob in one place.
 
-import { setStorageKey } from './prefs';
-import { configureNotify } from './notify';
-import { configureDigest } from './lowDigest';
-import { configureOSBridge, ensureNotificationPermission } from './osBridge';
+import { setStorageKey } from './prefs.js';
+import { configureNotify } from './notify.js';
+import { configureDigest } from './lowDigest.js';
+import { configureOSBridge, ensureNotificationPermission } from './osBridge.js';
 
 export function configure(opts = {}) {
   if (opts.storageKey) setStorageKey(opts.storageKey);

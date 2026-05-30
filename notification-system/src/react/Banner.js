@@ -1,54 +1,39 @@
 import React from 'react';
+const h = React.createElement;
 
 const BG     = { high: '#fef2f2', medium: '#eff6ff', low: '#f9fafb' };
 const BORDER = { high: '#dc2626', medium: '#2563eb', low: '#9ca3af' };
 const ICON   = { high: '\u2b50', medium: '\ud83d\udd14', low: '\u00b7' };
 
-// Renders a single banner. Generic — works for any item shape, since `title`
-// and `body` are passed through directly by the stack.
-export default function Banner({
-  priority,
-  title,
-  body,
-  summary,
-  count,
-  onOpen,
-  onDismiss,
-  onMouseEnter,
-  onMouseLeave,
-}) {
+export default function Banner(props) {
+  const { priority, title, body, summary, count, onOpen, onDismiss, onMouseEnter, onMouseLeave } = props;
   const isSummary = !!summary;
   const isRollingMedium = priority === 'medium' && count > 1 && !isSummary;
   const ariaLive = priority === 'high' ? 'assertive' : 'polite';
 
   const displayTitle = isRollingMedium
     ? `${count} new notifications`
-    : title || 'Notification';
+    : (title || 'Notification');
 
-  return (
-    <div
-      role="status"
-      aria-live={ariaLive}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      style={{ ...styles.card, background: BG[priority], borderLeft: `4px solid ${BORDER[priority]}` }}
-    >
-      <span style={styles.icon} aria-hidden>{ICON[priority]}</span>
-      <div style={styles.text}>
-        <div style={styles.titleRow}>
-          <b>{displayTitle}</b>
-          {!isRollingMedium && !isSummary && count > 1 && (
-            <span style={styles.countPill}>{'×'}{count}</span>
-          )}
-          <span style={styles.tier}>{priority.toUpperCase()}</span>
-        </div>
-        {body && <div style={styles.body}>{body}</div>}
-      </div>
-      <div style={styles.actions}>
-        {onOpen && <button onClick={onOpen} style={styles.open}>Open</button>}
-        <button onClick={onDismiss} style={styles.x} aria-label="Dismiss">{'✕'}</button>
-      </div>
-    </div>
+  return h('div', {
+    role: 'status', 'aria-live': ariaLive, onMouseEnter, onMouseLeave,
+    style: { ...styles.card, background: BG[priority], borderLeft: `4px solid ${BORDER[priority]}` },
+  },
+    h('span', { style: styles.icon, 'aria-hidden': true }, ICON[priority]),
+    h('div', { style: styles.text },
+      h('div', { style: styles.titleRow },
+        h('b', null, displayTitle),
+        !isRollingMedium && !isSummary && count > 1
+          ? h('span', { style: styles.countPill }, `\u00d7${count}`)
+          : null,
+        h('span', { style: styles.tier }, priority.toUpperCase()),
+      ),
+      body ? h('div', { style: styles.body }, body) : null,
+    ),
+    h('div', { style: styles.actions },
+      onOpen ? h('button', { onClick: onOpen, style: styles.open }, 'Open') : null,
+      h('button', { onClick: onDismiss, style: styles.x, 'aria-label': 'Dismiss' }, '\u2715'),
+    ),
   );
 }
 
