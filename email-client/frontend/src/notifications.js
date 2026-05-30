@@ -93,16 +93,16 @@ function flush() {
   }
   if (high.length) playBlip();
 
-  // MEDIUM: coalesce. 1 message → personal banner. N messages → summary banner.
+  // MEDIUM: every message flows into the single rolling banner. The stack
+  // manager coalesces by the shared 'medium:rolling' group key, so 12
+  // mediums = 1 toast with x12 count. One silent OS popup per burst.
+  for (const m of medium) {
+    addBanner({ priority: 'medium', message: m });
+  }
   if (medium.length === 1) {
     const m = medium[0];
-    addBanner({ priority: 'medium', message: m });
     osNotify({ title: m.fromName || m.fromAddress, body: m.subject, tag: m.id, silent: true, openMessage: m });
   } else if (medium.length > 1) {
-    addBanner({
-      priority: 'medium',
-      summary: { count: medium.length, messages: medium },
-    });
     osNotify({
       title: `${medium.length} new messages`,
       body: medium.slice(0, 3).map((m) => m.subject).join(' · '),

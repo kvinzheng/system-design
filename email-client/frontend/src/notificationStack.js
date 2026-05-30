@@ -80,7 +80,14 @@ export function maxBanners() {
 }
 
 function groupKeyFor(detail) {
-  if (detail.summary) return `summary:${detail.priority}:${Date.now()}`; // never group summaries
+  // MEDIUM: always one global rolling toast — never stack two medium banners.
+  // Bursts of any size, any sender, become a single "N new" toast.
+  if (detail.priority === 'medium') return 'medium:rolling';
+
+  if (detail.summary) return `summary:${detail.priority}:${Date.now()}`;
+
+  // HIGH: group per (sender, thread) so a thread burst becomes one banner,
+  // but different senders / threads each get their own banner.
   const m = detail.message;
   const sender = (m && (m.fromAddress || m.fromName)) || 'unknown';
   const thread = (m && (m.threadKey || m.subject)) || 'no-thread';

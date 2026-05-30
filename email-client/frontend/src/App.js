@@ -197,34 +197,37 @@ export default function App() {
       </header>
       {showSettings && <SettingsPopover onClose={() => setShowSettings(false)} />}
 
-      {stack.visible.length > 0 && (
-        <div>
-          {stack.visible.map((b) => (
-            <Banner
-              key={b.id}
-              priority={b.priority}
-              message={b.message || b.latestMessage}
-              summary={b.summary}
-              count={b.count}
-              onOpen={() => openBanner(b)}
-              onDismiss={() => dismissBanner(b.id)}
-              onMouseEnter={() => pauseAging(b.id)}
-              onMouseLeave={() => resumeAging(b.id)}
-            />
-          ))}
-        </div>
-      )}
-      <OverflowPill
-        items={stack.overflow}
-        onOpen={openBanner}
-        onDismiss={dismissBanner}
-        onClearAll={clearOverflow}
-      />
-
       <div style={styles.body}>
         <Sidebar folders={FOLDERS} active={folder} counts={folderCounts} onSelect={setFolder} />
         <MessageList items={messages} selectedId={selected?.id} onSelect={onSelect} loading={loading} />
         <Reader message={selected} onDelete={onDelete} onReply={(m) => { setComposing({ to: m.fromAddress, subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`, body: `\n\n---\nOn ${new Date(m.receivedAt).toLocaleString()}, ${m.fromAddress} wrote:\n> ${(m.body||'').replace(/\n/g, '\n> ')}` }); }} />
+      </div>
+
+      {/* Floating overlay column at bottom-right — toasts do not take layout space */}
+      <div style={styles.toastOverlay} aria-label="Notifications">
+        {stack.visible.map((b) => (
+          <Banner
+            key={b.id}
+            priority={b.priority}
+            message={b.message || b.latestMessage}
+            summary={b.summary}
+            count={b.count}
+            onOpen={() => openBanner(b)}
+            onDismiss={() => dismissBanner(b.id)}
+            onMouseEnter={() => pauseAging(b.id)}
+            onMouseLeave={() => resumeAging(b.id)}
+          />
+        ))}
+        {stack.overflow.length > 0 && (
+          <div style={styles.overflowWrap}>
+            <OverflowPill
+              items={stack.overflow}
+              onOpen={openBanner}
+              onDismiss={dismissBanner}
+              onClearAll={clearOverflow}
+            />
+          </div>
+        )}
       </div>
 
       {composing && (
@@ -253,4 +256,14 @@ const styles = {
   prioMed: { background: '#2563eb' },
   prioLow: { background: '#6b7280' },
   body: { flex: 1, display: 'grid', gridTemplateColumns: '200px 360px 1fr', minHeight: 0 },
+  toastOverlay: {
+    position: 'fixed', bottom: 16, right: 16, zIndex: 40,
+    display: 'flex', flexDirection: 'column-reverse', gap: 8,
+    pointerEvents: 'none', // children re-enable
+    maxHeight: 'calc(100vh - 100px)',
+  },
+  overflowWrap: {
+    pointerEvents: 'auto', width: 360,
+    background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', overflow: 'hidden',
+  },
 };
