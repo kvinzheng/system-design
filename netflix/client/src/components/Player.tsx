@@ -5,8 +5,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type Hls from 'hls.js';
-import type { Level } from 'hls.js';
+import Hls, { type Level, type LevelSwitchedData } from 'hls.js';
 import type { Video } from '../types';
 import { HlsVideo } from './HlsVideo';
 
@@ -57,10 +56,10 @@ export const Player: React.FC<Props> = ({ video, onExit }) => {
   const onHls = useCallback((hls: Hls | null) => {
     hlsRef.current = hls;
     if (!hls) return;
-    hls.on(Hls.events?.MANIFEST_PARSED ?? 'hlsManifestParsed', () => {
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
       setLevels(hls.levels ?? []);
     });
-    hls.on(Hls.events?.LEVEL_SWITCHED ?? 'hlsLevelSwitched', (_e, data) => {
+    hls.on(Hls.Events.LEVEL_SWITCHED, (_e: string, data: LevelSwitchedData) => {
       // For the "Auto" UI badge.
       if (hls.autoLevelEnabled) setCurrentLevel(-1);
       else setCurrentLevel(data.level);
