@@ -18,6 +18,7 @@ import {
 import { evaluateSpam, SPAM_DEFAULTS } from './internal/spamShield.js';
 import { loadPrefs, savePrefs, isInQuietHours } from './internal/prefs.js';
 import { createOSBridge } from './internal/osBridge.js';
+import { toast } from './internal/toastStore.js';
 
 const MUTE_KEY_DEFAULT = 'priority-notif:muted-senders:v1';
 const PREFS_KEY_DEFAULT = 'priority-notif:prefs:v1';
@@ -150,50 +151,46 @@ export default function NotificationProvider({
       return i;
     }
 
-    // MEDIUM: suppress when user is on the relevant surface.
-    // Suppress entirely if focus mode or quiet hours.
+    // MEDIUM: render as a toast (slide-in bottom-right, auto-dismiss).
+    // Suppress when user is on the relevant surface, or focus/quiet hours.
     const suppressForSurface = isViewingSurface(i.surface);
     const suppressForPrefs = prefsRef.current.focusMode || isInQuietHours(prefsRef.current);
-    if (suppressForSurface) return i; // do not even add to overflow — in-context update is enough
-    dispatch({
-      type: 'add',
-      input: i,
-      cap: maxBanners(prefsRef.current),
-      suppress: suppressForPrefs,
+    if (suppressForSurface || suppressForPrefs) return i;
+    toast(i.title || '', {
+      type: 'info',
+      body: i.body,
+      groupKey: i.groupKey || 'medium:rolling',
+      duration: 5000,
     });
-    if (!suppressForPrefs) {
-      osRef.current.osNotify({
-        title: i.title,
-        body: i.body || '',
-        tag: i.groupKey || i.title,
-        silent: true,
-        onOpen: i.onOpen,
-      });
-    }
+    osRef.current.osNotify({
+      title: i.title,
+      body: i.body || '',
+      tag: i.groupKey || i.title,
+      silent: true,
+      onOpen: i.onOpen,
+    });
     return i;
   }, [spamConfig, isViewingSurface]);
 
-  // Digest flush loop
+  // Digest flush loop — low-priority batch surfaces as a single toast.
   useEffect(() => {
     const id = setInterval(() => {
       const q = digestRef.current;
       if (!q.length) return;
+      if (prefsRef.current.focusMode || isInQuietHours(prefsRef.current)) return;
       const batch = q.splice(0);
-      dispatch({
-        type: 'add',
-        input: {
-          priority: 'medium',
-          title: digestTitle(batch.length),
-          body: batch.slice(0, 3).map((x) => x.title).filter(Boolean).join(' · '),
-          summary: { count: batch.length, items: batch, kind: 'digest' },
-          groupKey: `digest:${Date.now()}`,
-        },
-        cap: maxBanners(prefsRef.current),
-        suppress: prefsRef.current.focusMode || isInQuietHours(prefsRef.current),
+      toast(digestTitle(batch.length), {
+        type: 'digest',
+        body: batch.slice(0, 3).map((x) => x.title).filter(Boolean).join(' \u00b7 '),
+        groupKey: `digest:${Date.now()}`,
+        duration: 6000,
       });
     }, digestWindowMs);
     return () => clearInterval(id);
   }, [digestWindowMs, digestTitle]);
+
+  // Hooks MUST be at top level — never inside a useMemo callback.
+  const mutedSendersArr = useMemo(() => [...mutedSet], [mutedSet]);
 
   const value = useMemo(() => ({
     // mutations
@@ -209,21 +206,16 @@ export default function NotificationProvider({
     // reads
     visible: stack.visible,
     overflow: stack.overflow,
-    mutedSenders: useMemoArray(mutedSet),
+    mutedSenders: mutedSendersArr,
     activeSurface,
     prefs,
     maxVisible: maxBanners(prefs),
   }), [
     notify, muteSender, unmuteSender, setPrefs,
-    stack.visible, stack.overflow, mutedSet, activeSurface, prefs,
+    stack.visible, stack.overflow, mutedSendersArr, activeSurface, prefs,
   ]);
 
   return React.createElement(NotificationContext.Provider, { value }, children);
-}
-
-function useMemoArray(set) {
-  // Stable array reference per-Set-identity (Set identity changes on each update).
-  return React.useMemo(() => [...set], [set]);
 }
 
 // ── persistence helpers (kept local since they're trivial) ─────────────

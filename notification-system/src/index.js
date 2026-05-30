@@ -17,3 +17,5 @@ export { default as NotificationOverlay } from './components/NotificationOverlay
 export { default as SettingsPopover } from './components/SettingsPopover.js';
 export { default as Banner } from './components/Banner.js';
 export { default as OverflowPill } from './components/OverflowPill.js';
+export { default as Toaster } from './components/Toaster.js';
+export { toast, toastStore } from './internal/toastStore.js';

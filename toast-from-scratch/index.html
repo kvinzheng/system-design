@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Toast from scratch</title>
+  <style>
+    body { font: 14px system-ui; margin: 40px; max-width: 720px; }
+    h1 { font-size: 20px; }
+    button {
+      font: inherit; padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #d4d4d8; background: white; cursor: pointer;
+      margin: 4px;
+    }
+    button:hover { background: #f4f4f5; }
+    .row { margin-top: 16px; }
+    .note { color: #6b7280; font-size: 12px; margin-top: 24px; line-height: 1.6; }
+    code { background: #f4f4f5; padding: 2px 5px; border-radius: 4px; }
+  </style>
+
+  <!-- React via importmap so we don't need a build step -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+    }
+  }
+  </script>
+  <!-- Babel so we can write JSX inline. NOT for production. -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+</head>
+<body>
+  <h1>Toast from scratch</h1>
+  <p>Open <code>toast.jsx</code> and read it top-to-bottom. Then click below.</p>
+  <div id="app"></div>
+  <p class="note">
+    Architecture: a module-level <b>store</b> (just a Set of listeners + an array)
+    is the source of truth. <code>toast()</code> mutates the store from anywhere.
+    The <code>&lt;Toaster /&gt;</code> component subscribes via <code>useSyncExternalStore</code>
+    and renders. This is exactly how Sonner and react-hot-toast work.
+  </p>
+
+  <!--
+    Babel-standalone supports `data-type="module"` + `data-presets="react"`
+    to load and compile a JSX file as an ES module that respects importmap.
+    This is the documented in-browser way to run JSX with imports.
+  -->
+  <script type="text/babel" data-type="module" data-presets="react" src="./toast.jsx"></script>
+</body>
+</html>
