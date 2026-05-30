@@ -10,3 +10,7 @@ export { setActiveSurface, getActiveSurface, isViewingSurface } from './core/uiC
 export { getPrefs, setPrefs, subscribePrefs, densityCap, isInQuietHours, setStorageKey } from './core/prefs.js';
 export { ensureNotificationPermission, osNotify, playBlip } from './core/osBridge.js';
 export { enqueueLow } from './core/lowDigest.js';
+export {
+  muteSender, unmuteSender, getMutedSenders, subscribeMutes,
+  evaluate as evaluateSpam,
+} from './core/spamShield.js';

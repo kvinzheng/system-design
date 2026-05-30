@@ -19,7 +19,14 @@
     button.gear   { background: #fbbf24; color: #111; }
     .surface-tag { font-size: 12px; color: #64748b; margin-left: 8px; }
     select { background: #334155; color: #f1f5f9; border: 1px solid #475569; border-radius: 4px; padding: 6px; font-size: 13px; }
-    code { background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #fbbf24; font-size: 12px; }
+    .activity { background: #0f172a; border-radius: 8px; padding: 8px 12px; margin-top: 8px; max-height: 200px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px; }
+    .activity .item { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid #1e293b; }
+    .activity .item:last-child { border-bottom: none; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.high { background: #dc2626; } .dot.medium { background: #2563eb; } .dot.low { background: #9ca3af; }
+    .ts { color: #64748b; font-size: 11px; }
+    .chip { display: inline-block; background: #0f172a; padding: 4px 10px; border-radius: 999px; font-size: 12px; margin-left: 8px; }
+    .chip.warn { background: #422006; color: #fbbf24; }
   </style>
 </head>
 <body>
@@ -43,6 +50,7 @@
 
     import {
       configure, notify, setActiveSurface,
+      muteSender, unmuteSender, subscribeMutes,
     } from '../src/index.js';
     import { NotificationOverlay, SettingsPopover } from '../src/react/index.js';
 
@@ -50,8 +58,21 @@
       const [surface, setSurface] = useState('dashboard');
       const [showSettings, setShowSettings] = useState(false);
       const [badge, setBadge] = useState({ high: 0, medium: 0, low: 0 });
+      const [activity, setActivity] = useState([]);
+      const [lowQueue, setLowQueue] = useState({ count: 0, fireAt: null });
+      const [now, setNow] = useState(Date.now());
+      const [sender, setSender] = useState('alice');
+      const [shieldLog, setShieldLog] = useState([]);
+      const [muted, setMuted] = useState([]);
 
       useEffect(() => { setActiveSurface(surface); }, [surface]);
+      useEffect(() => subscribeMutes(setMuted), []);
+
+      // Tick clock for countdown
+      useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 250);
+        return () => clearInterval(id);
+      }, []);
 
       useEffect(() => {
         configure({
@@ -59,10 +80,38 @@
           digestWindowMs: 10_000,
           digestTitle: (n) => `${n} low-priority items in the last 10s`,
           requestOSPermission: true,
-          onBadge: ({ priority }) =>
-            setBadge((b) => ({ ...b, [priority]: b[priority] + 1 })),
+          spamShield: { windowMs: 60_000, maxPerSender: 5, dedupeWindowMs: 30_000 },
+          onShieldVerdict: ({ verdict, reason, input }) => {
+            if (verdict === 'pass') return;
+            setShieldLog((l) => [
+              { verdict, reason, sender: input.meta && input.meta.sender, title: input.title, ts: Date.now(), id: Math.random() },
+              ...l,
+            ].slice(0, 10));
+          },
+          onBadge: ({ priority, item }) => {
+            setBadge((b) => ({ ...b, [priority]: b[priority] + 1 }));
+            // Activity feed: every notify() lands here regardless of tier
+            setActivity((a) => [
+              { priority, title: item.title, ts: Date.now(), id: Math.random() },
+              ...a,
+            ].slice(0, 12));
+            // Track low-priority digest queue + when it will fire
+            if (priority === 'low') {
+              setLowQueue((q) => ({
+                count: q.count + 1,
+                fireAt: q.fireAt || (Date.now() + 10_000),
+              }));
+            }
+          },
         });
       }, []);
+
+      // When the digest window elapses, reset the chip
+      useEffect(() => {
+        if (lowQueue.fireAt && now >= lowQueue.fireAt) {
+          setLowQueue({ count: 0, fireAt: null });
+        }
+      }, [now, lowQueue.fireAt]);
 
       let counter = React.useRef(0);
       const fire = (priority, opts = {}) => {
@@ -73,13 +122,40 @@
           title: opts.title || `${priority.toUpperCase()} event #${n}`,
           body: opts.body || `Triggered at ${new Date().toLocaleTimeString()}`,
           surface: opts.surface,
+          meta: { sender: opts.sender || sender },
           onOpen: () => alert(`Opened ${priority} #${n}`),
         });
       };
 
-      const fireBurst = (priority, count, surface) => {
+      const fireBurst = (priority, count, opts = {}) => {
         for (let i = 0; i < count; i++) {
-          setTimeout(() => fire(priority, { surface, title: `${priority.toUpperCase()} burst ${i + 1}/${count}` }), i * 50);
+          setTimeout(() => fire(priority, { ...opts, title: opts.title ? `${opts.title} ${i + 1}/${count}` : `${priority.toUpperCase()} burst ${i + 1}/${count}` }), i * 50);
+        }
+      };
+
+      // Spam scenarios -----------------------------------------------------
+      const spamBurst = () => {
+        // 15 medium notifications from 'spammer' in quick succession.
+        // Shield should: pass the first 5 as medium, then downgrade the rest
+        // to low (rate-limit triggered).
+        for (let i = 0; i < 15; i++) {
+          setTimeout(() => notify({
+            priority: 'medium',
+            title: `🔥 Hot deal! Click now ${i + 1}/15`,
+            body: 'Limited time offer just for you',
+            meta: { sender: 'spammer' },
+          }), i * 30);
+        }
+      };
+      const dupeBurst = () => {
+        // 5 IDENTICAL messages — fingerprint dedupe drops 4 of 5.
+        for (let i = 0; i < 5; i++) {
+          setTimeout(() => notify({
+            priority: 'medium',
+            title: 'Verify your account',
+            body: 'Click here to verify',
+            meta: { sender: 'phisher' },
+          }), i * 30);
         }
       };
 
@@ -94,6 +170,13 @@
           <div className="card">
             <h2>1. Fire a single notification</h2>
             <div className="row">
+              <label>Sender:&nbsp;
+                <select value={sender} onChange={(e) => setSender(e.target.value)}>
+                  <option value="alice">alice</option>
+                  <option value="bob">bob</option>
+                  <option value="newsletter">newsletter</option>
+                </select>
+              </label>
               <button className="high"   onClick={() => fire('high')}>● High</button>
               <button className="medium" onClick={() => fire('medium')}>● Medium</button>
               <button className="low"    onClick={() => fire('low')}>● Low</button>
@@ -107,6 +190,60 @@
               <button onClick={() => fireBurst('high', 5)}>5× high (per-group)</button>
               <button onClick={() => fireBurst('medium', 12)}>12× medium (1 rolling toast)</button>
               <button onClick={() => fireBurst('low', 8)}>8× low (1 digest in 10s)</button>
+            </div>
+          </div>
+
+          <div className="card" style={{ borderLeft: '3px solid #f97316' }}>
+            <h2>🛡️ Spam shield</h2>
+            <p className="lead" style={{ fontSize: 13 }}>
+              Three defenses run before <code>notify()</code> ever reaches the
+              banner stack: <b>mute list</b> (drop), <b>content dedupe</b> (drop
+              identical message within 30s), and <b>per-sender rate limit</b>
+              (downgrade to low if &gt;5/min from one sender).
+            </p>
+            <div className="row">
+              <button className="medium" onClick={spamBurst}>
+                🔥 15× from <code>spammer</code> (rate-limit downgrade)
+              </button>
+              <button className="medium" onClick={dupeBurst}>
+                🎯 5× identical from <code>phisher</code> (dedupe drop)
+              </button>
+              <button onClick={() => muteSender(sender)}>
+                🔇 Mute <code>{sender}</code>
+              </button>
+            </div>
+            {muted.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>MUTED SENDERS</div>
+                <div className="row">
+                  {muted.map((s) => (
+                    <span key={s} className="chip" style={{ background: '#3b0764', color: '#e9d5ff' }}>
+                      {s}
+                      <button onClick={() => unmuteSender(s)} style={{ marginLeft: 6, background: 'transparent', color: '#e9d5ff', border: 'none', cursor: 'pointer' }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>SHIELD VERDICTS (live)</div>
+              <div className="activity">
+                {shieldLog.length === 0 && <div style={{ color: '#64748b' }}>nothing blocked yet</div>}
+                {shieldLog.map((v) => (
+                  <div key={v.id} className="item">
+                    <span className="chip" style={{
+                      background: v.verdict === 'drop' ? '#7f1d1d' : '#78350f',
+                      color: v.verdict === 'drop' ? '#fecaca' : '#fde68a',
+                      marginLeft: 0,
+                    }}>{v.verdict}</span>
+                    <span style={{ flex: 1 }}>
+                      <code>{v.sender || '?'}</code> · {v.title}
+                      <span style={{ color: '#64748b', marginLeft: 6 }}>({v.reason})</span>
+                    </span>
+                    <span className="ts">{new Date(v.ts).toLocaleTimeString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -140,6 +277,31 @@
               <span>High: <code>{badge.high}</code></span>
               <span>Medium: <code>{badge.medium}</code></span>
               <span>Low: <code>{badge.low}</code></span>
+              {lowQueue.count > 0 && (
+                <span className="chip warn">
+                  Low queue: {lowQueue.count} · digest in{' '}
+                  {Math.max(0, Math.ceil((lowQueue.fireAt - now) / 1000))}s
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Activity feed (every notify(), regardless of tier)</h2>
+            <p className="lead" style={{ fontSize: 13, marginBottom: 8 }}>
+              This is where low-priority items become visible. The toast layer
+              stays uncluttered — lows show up here and in the badge counter
+              instantly, and only get a toast when the hourly digest fires.
+            </p>
+            <div className="activity">
+              {activity.length === 0 && <div style={{ color: '#64748b' }}>nothing yet</div>}
+              {activity.map((a) => (
+                <div key={a.id} className="item">
+                  <span className={`dot ${a.priority}`} />
+                  <span style={{ flex: 1 }}>{a.title}</span>
+                  <span className="ts">{new Date(a.ts).toLocaleTimeString()}</span>
+                </div>
+              ))}
             </div>
           </div>
 

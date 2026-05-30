@@ -19,18 +19,29 @@ import { addBanner } from './stack.js';
 import { isViewingSurface } from './uiContext.js';
 import { enqueueLow } from './lowDigest.js';
 import { osNotify, playBlip } from './osBridge.js';
+import { evaluate as evaluateSpam } from './spamShield.js';
 
 const FLUSH_MS = 500;
 
 let queues = { high: [], medium: [], low: [] };
 let flushTimer = null;
 let onBadge = null;
+let onShieldVerdict = null;
 
-export function configureNotify({ onBadge: cb } = {}) {
+export function configureNotify({ onBadge: cb, onShieldVerdict: sv } = {}) {
   if (typeof cb === 'function') onBadge = cb;
+  if (typeof sv === 'function') onShieldVerdict = sv;
 }
 
 export function notify(input) {
+  // Spam shield runs first — may drop or downgrade.
+  const verdict = evaluateSpam(input);
+  if (onShieldVerdict) {
+    try { onShieldVerdict({ verdict: verdict.action, reason: verdict.reason, input }); } catch {}
+  }
+  if (verdict.action === 'drop') return;
+  input = verdict.input;
+
   const priority = input.priority || 'medium';
   if (!queues[priority]) queues[priority] = [];
   queues[priority].push(input);
