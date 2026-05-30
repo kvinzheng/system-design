@@ -80,7 +80,7 @@
           digestWindowMs: 10_000,
           digestTitle: (n) => `${n} low-priority items in the last 10s`,
           requestOSPermission: true,
-          spamShield: { windowMs: 60_000, maxPerSender: 5, dedupeWindowMs: 30_000 },
+          spamShield: { windowMs: 60_000, maxPerSender: 5, dedupeWindowMs: 30_000, trustedSenders: ['celebrity', 'pagerduty'] },
           onShieldVerdict: ({ verdict, reason, input }) => {
             if (verdict === 'pass') return;
             setShieldLog((l) => [
@@ -158,6 +158,20 @@
           }), i * 30);
         }
       };
+      const celebrityBurst = () => {
+        // 20 DISTINCT posts from a TRUSTED sender. Shield never downgrades
+        // (trustedSenders bypass). Stack's medium-rolling group key collapses
+        // them all into ONE banner with count = 20. Compare to spammer above:
+        // spammer = 5 banners + 10 in digest, celebrity = 1 banner with x20.
+        for (let i = 0; i < 20; i++) {
+          setTimeout(() => notify({
+            priority: 'medium',
+            title: `🌟 New post #${i + 1} from celebrity`,
+            body: `Post content ${Math.random().toString(36).slice(2, 8)}`,
+            meta: { sender: 'celebrity' },
+          }), i * 40);
+        }
+      };
 
       return (
         <>
@@ -207,6 +221,9 @@
               </button>
               <button className="medium" onClick={dupeBurst}>
                 🎯 5× identical from <code>phisher</code> (dedupe drop)
+              </button>
+              <button className="medium" style={{ background: '#7c3aed' }} onClick={celebrityBurst}>
+                🌟 20× from <code>celebrity</code> (trusted → coalesce)
               </button>
               <button onClick={() => muteSender(sender)}>
                 🔇 Mute <code>{sender}</code>

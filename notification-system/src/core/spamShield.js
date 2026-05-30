@@ -17,6 +17,7 @@ let config = {
   windowMs: 60_000,
   maxPerSender: 5,        // > N per windowMs from one sender => downgrade
   dedupeWindowMs: 30_000, // identical (sender, fingerprint) within window => drop
+  trustedSenders: [],     // bypass rate-limit (still subject to mute + dedupe)
 };
 
 const senderHits = new Map();      // sender → [ts, ts, ...]
@@ -88,9 +89,11 @@ export function evaluate(input) {
     const arr = (senderHits.get(sender) || []).filter((t) => now - t < config.windowMs);
     arr.push(now);
     senderHits.set(sender, arr);
-    if (arr.length > config.maxPerSender && input.priority !== 'high') {
+    const trusted = config.trustedSenders.includes(sender);
+    if (arr.length > config.maxPerSender && input.priority !== 'high' && !trusted) {
       // Don't downgrade HIGH — by definition the user wants to know.
-      // For medium/low, demote to low so it joins the digest.
+      // Don't downgrade TRUSTED senders — they're celebrities/legit-noisy,
+      // let the coalescer collapse them into one banner with a count.
       return {
         action: 'downgrade',
         reason: `rate-limit:${arr.length}/${config.windowMs / 1000}s`,
