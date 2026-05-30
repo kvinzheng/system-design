@@ -5,8 +5,8 @@ const BG     = { high: '#fef2f2', medium: '#eff6ff', low: '#f9fafb' };
 const BORDER = { high: '#dc2626', medium: '#2563eb', low: '#9ca3af' };
 const ICON   = { high: '\u2b50', medium: '\ud83d\udd14', low: '\u00b7' };
 
-export default function Banner(props) {
-  const { priority, title, body, summary, count, onOpen, onDismiss, onMouseEnter, onMouseLeave } = props;
+export default function Banner({ banner, onOpen, onDismiss, onMouseEnter, onMouseLeave }) {
+  const { priority, title, body, summary, count } = banner;
   const isSummary = !!summary;
   const isRollingMedium = priority === 'medium' && count > 1 && !isSummary;
   const ariaLive = priority === 'high' ? 'assertive' : 'polite';
@@ -16,7 +16,9 @@ export default function Banner(props) {
     : (title || 'Notification');
 
   return h('div', {
-    role: 'status', 'aria-live': ariaLive, onMouseEnter, onMouseLeave,
+    role: 'status',
+    'aria-live': ariaLive,
+    onMouseEnter, onMouseLeave,
     style: { ...styles.card, background: BG[priority], borderLeft: `4px solid ${BORDER[priority]}` },
   },
     h('span', { style: styles.icon, 'aria-hidden': true }, ICON[priority]),
@@ -38,11 +40,7 @@ export default function Banner(props) {
 }
 
 const styles = {
-  card: {
-    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-    borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-    pointerEvents: 'auto', width: 360,
-  },
+  card: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', pointerEvents: 'auto', width: 360 },
   icon: { fontSize: 18 },
   text: { flex: 1, minWidth: 0 },
   titleRow: { fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', gap: 6 },

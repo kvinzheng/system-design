@@ -1,19 +1,16 @@
 {
   "name": "priority-notifications",
-  "version": "0.1.0",
-  "description": "Generic 3-tier (high/medium/low) notification system with coalescing, stack management, focus-aware suppression, and hourly low-priority digest. Framework-agnostic core + optional React adapter.",
+  "version": "0.2.0",
+  "description": "React-first 3-tier (high/medium/low) notification system with coalescing, stack management, focus-aware suppression, spam shield (mute / dedupe / rate-limit + trusted senders), and low-priority digest.",
   "main": "src/index.js",
   "module": "src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./react": "./src/react/index.js"
+    ".": "./src/index.js"
   },
   "peerDependencies": {
-    "react": ">=17"
+    "react": ">=17",
+    "react-dom": ">=17"
   },
-  "peerDependenciesMeta": {
-    "react": { "optional": true }
-  },
-  "keywords": ["notifications", "toast", "banner", "priority", "coalescing", "digest"],
+  "keywords": ["notifications", "toast", "banner", "priority", "coalescing", "digest", "react", "spam-shield"],
   "license": "MIT"
 }

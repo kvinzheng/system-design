@@ -1,16 +1,19 @@
-// Public API: framework-free core.
+// priority-notifications — React-only public API.
+//
+// Usage:
+//   <NotificationProvider spamShield={{ trustedSenders: ['celebrity'] }}>
+//     <YourApp />
+//     <NotificationOverlay />
+//   </NotificationProvider>
+//
+//   function SomeFeature() {
+//     const { notify } = useNotifications();
+//     return <button onClick={() => notify({ priority: 'medium', title: 'hi' })}>ping</button>;
+//   }
 
-export { configure } from './core/configure.js';
-export { notify, _resetNotify } from './core/notify.js';
-export {
-  subscribe, getState, addBanner, dismissBanner, clearOverflow,
-  pauseAging, resumeAging, maxBanners,
-} from './core/stack.js';
-export { setActiveSurface, getActiveSurface, isViewingSurface } from './core/uiContext.js';
-export { getPrefs, setPrefs, subscribePrefs, densityCap, isInQuietHours, setStorageKey } from './core/prefs.js';
-export { ensureNotificationPermission, osNotify, playBlip } from './core/osBridge.js';
-export { enqueueLow } from './core/lowDigest.js';
-export {
-  muteSender, unmuteSender, getMutedSenders, subscribeMutes,
-  evaluate as evaluateSpam,
-} from './core/spamShield.js';
+export { default as NotificationProvider } from './NotificationProvider.js';
+export { useNotifications } from './context.js';
+export { default as NotificationOverlay } from './components/NotificationOverlay.js';
+export { default as SettingsPopover } from './components/SettingsPopover.js';
+export { default as Banner } from './components/Banner.js';
+export { default as OverflowPill } from './components/OverflowPill.js';
