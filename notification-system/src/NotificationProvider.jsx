@@ -215,7 +215,7 @@ export default function NotificationProvider({
     stack.visible, stack.overflow, mutedSendersArr, activeSurface, prefs,
   ]);
 
-  return React.createElement(NotificationContext.Provider, { value }, children);
+  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }
 
 // ── persistence helpers (kept local since they're trivial) ─────────────

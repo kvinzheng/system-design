@@ -1,30 +1,30 @@
 import React from 'react';
-const h = React.createElement;
 
 export default function OverflowPill({ count, open, onToggle, items, onDismiss, onClearAll }) {
-  return h('div', { style: styles.wrap },
-    h('button', { onClick: onToggle, style: styles.pill, 'aria-expanded': open },
-      open ? '\u25b2' : '\u2193',
-      ' ',
-      `${count} more notification${count === 1 ? '' : 's'}`,
-    ),
-    open
-      ? h('div', { style: styles.tray },
-          items.slice(0, 10).map((b) =>
-            h('div', { key: b.id, style: styles.item },
-              h('span', { style: { ...styles.dot, background: dotColor(b.priority) } }),
-              h('div', { style: { flex: 1, minWidth: 0 } },
-                h('div', { style: styles.title }, b.title),
-                b.body ? h('div', { style: styles.body }, b.body) : null,
-              ),
-              h('button', { onClick: () => onDismiss(b.id), style: styles.x }, '\u2715'),
-            ),
-          ),
-          items.length > 0
-            ? h('button', { onClick: onClearAll, style: styles.clear }, 'Clear all')
-            : null,
-        )
-      : null,
+  return (
+    <div style={styles.wrap}>
+      <button onClick={onToggle} style={styles.pill} aria-expanded={open}>
+        {open ? '\u25b2' : '\u2193'}{' '}
+        {`${count} more notification${count === 1 ? '' : 's'}`}
+      </button>
+      {open && (
+        <div style={styles.tray}>
+          {items.slice(0, 10).map((b) => (
+            <div key={b.id} style={styles.item}>
+              <span style={{ ...styles.dot, background: dotColor(b.priority) }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={styles.title}>{b.title}</div>
+                {b.body && <div style={styles.body}>{b.body}</div>}
+              </div>
+              <button onClick={() => onDismiss(b.id)} style={styles.x}>{'\u2715'}</button>
+            </div>
+          ))}
+          {items.length > 0 && (
+            <button onClick={onClearAll} style={styles.clear}>Clear all</button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
