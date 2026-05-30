@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>priority-notifications · demo</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    main { max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p.lead { color: #94a3b8; margin: 0 0 24px; line-height: 1.6; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button { background: #334155; color: #f1f5f9; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    button:hover { background: #475569; }
+    button.high   { background: #dc2626; }
+    button.medium { background: #2563eb; }
+    button.low    { background: #6b7280; }
+    button.gear   { background: #fbbf24; color: #111; }
+    .surface-tag { font-size: 12px; color: #64748b; margin-left: 8px; }
+    select { background: #334155; color: #f1f5f9; border: 1px solid #475569; border-radius: 4px; padding: 6px; font-size: 13px; }
+    code { background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #fbbf24; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react":         "https://esm.sh/react@18.3.1",
+      "react-dom":     "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+    }
+  }
+  </script>
+
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module" data-presets="react">
+    import React, { useState, useEffect } from 'react';
+    import { createRoot } from 'react-dom/client';
+
+    import {
+      configure, notify, setActiveSurface,
+    } from '../src/index.js';
+    import {
+      NotificationOverlay, SettingsPopover,
+    } from '../src/react/index.js';
+
+    function App() {
+      const [surface, setSurface] = useState('dashboard');
+      const [showSettings, setShowSettings] = useState(false);
+      const [badge, setBadge] = useState({ high: 0, medium: 0, low: 0 });
+
+      useEffect(() => { setActiveSurface(surface); }, [surface]);
+
+      useEffect(() => {
+        configure({
+          storageKey: 'demo:notif:prefs',
+          digestWindowMs: 10_000,
+          digestTitle: (n) => `${n} low-priority items in the last 10s`,
+          requestOSPermission: true,
+          onBadge: ({ priority }) =>
+            setBadge((b) => ({ ...b, [priority]: b[priority] + 1 })),
+        });
+      }, []);
+
+      let counter = React.useRef(0);
+      const fire = (priority, opts = {}) => {
+        counter.current += 1;
+        const n = counter.current;
+        notify({
+          priority,
+          title: opts.title || `${priority.toUpperCase()} event #${n}`,
+          body: opts.body || `Triggered at ${new Date().toLocaleTimeString()}`,
+          surface: opts.surface,
+          onOpen: () => alert(`Opened ${priority} #${n}`),
+        });
+      };
+
+      const fireBurst = (priority, count, surface) => {
+        for (let i = 0; i < count; i++) {
+          setTimeout(() => fire(priority, { surface, title: `${priority.toUpperCase()} burst ${i + 1}/${count}` }), i * 50);
+        }
+      };
+
+      return (
+        <>
+          <h1>priority-notifications</h1>
+          <p className="lead">
+            Generic 3-tier notification system. The same package powers the email
+            client demo — here it knows nothing about email.
+          </p>
+
+          <div className="card">
+            <h2>1. Fire a single notification</h2>
+            <div className="row">
+              <button className="high"   onClick={() => fire('high')}>● High</button>
+              <button className="medium" onClick={() => fire('medium')}>● Medium</button>
+              <button className="low"    onClick={() => fire('low')}>● Low</button>
+              <button className="gear" onClick={() => setShowSettings(true)}>⚙ Settings</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>2. Fire a burst (test coalescing)</h2>
+            <div className="row">
+              <button onClick={() => fireBurst('high', 5)}>5× high (per-group)</button>
+              <button onClick={() => fireBurst('medium', 12)}>12× medium (1 rolling toast)</button>
+              <button onClick={() => fireBurst('low', 8)}>8× low (1 digest in 10s)</button>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>3. Surface suppression</h2>
+            <p className="lead" style={{ fontSize: 13 }}>
+              Active surface: <code>{surface}</code>. Medium toasts whose
+              <code> surface </code> matches will be suppressed (no toast — the user is
+              already looking at that view).
+            </p>
+            <div className="row">
+              <label>Viewing:&nbsp;
+                <select value={surface} onChange={(e) => setSurface(e.target.value)}>
+                  <option value="dashboard">dashboard</option>
+                  <option value="alerts">alerts</option>
+                  <option value="messages">messages</option>
+                </select>
+              </label>
+              <button className="medium" onClick={() => fire('medium', { surface: 'dashboard', title: 'dashboard ping' })}>
+                Medium → dashboard
+              </button>
+              <button className="medium" onClick={() => fire('medium', { surface: 'alerts', title: 'alerts ping' })}>
+                Medium → alerts
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Badge counters (every tier including low)</h2>
+            <div className="row">
+              <span>High: <code>{badge.high}</code></span>
+              <span>Medium: <code>{badge.medium}</code></span>
+              <span>Low: <code>{badge.low}</code></span>
+            </div>
+          </div>
+
+          <NotificationOverlay />
+          {showSettings && <SettingsPopover onClose={() => setShowSettings(false)} />}
+        </>
+      );
+    }
+
+    createRoot(document.getElementById('app')).render(<App />);
+  </script>
+</body>
+</html>
