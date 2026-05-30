@@ -21,9 +21,11 @@ export default function App() {
   const [outboxCount, setOutboxCount] = useState(getOutbox().length);
   const [online, setOnline] = useState(isOnline());
   const [composing, setComposing] = useState(false);
-  const [banner, setBanner] = useState(null);
+  const [banners, setBanners] = useState([]); // stack of {id, priority, message?, summary?, persistent?}
 
   const refreshOnlineState = () => setOnline(isOnline());
+
+  const dismissBanner = (id) => setBanners((prev) => prev.filter((b) => b.id !== id));
 
   // Load whenever folder or query changes
   const reload = async () => {
@@ -83,20 +85,38 @@ export default function App() {
   // Realtime: new mail push
   useEffect(() => {
     const onNew = (msg) => {
-      notifyNewMail(msg, { onClick: (m) => { setFolder('inbox'); setSelected(m); } });
+      notifyNewMail(msg);
       if (folder === 'inbox') {
         setMessages((prev) => (prev.some((p) => p.id === msg.id) ? prev : [msg, ...prev]));
       }
     };
     const onBanner = (e) => {
-      setBanner(e.detail);
-      setTimeout(() => setBanner(null), 5000);
+      const detail = e.detail;
+      setBanners((prev) => {
+        // Cap stack at 3; drop oldest non-persistent first, else oldest.
+        let next = [...prev, detail];
+        if (next.length > 3) {
+          const dropIdx = next.findIndex((b) => !b.persistent);
+          next.splice(dropIdx >= 0 ? dropIdx : 0, 1);
+        }
+        return next;
+      });
+      if (detail.autoDismissMs) {
+        setTimeout(() => dismissBanner(detail.id), detail.autoDismissMs);
+      }
+    };
+    const onOpenFromOS = (e) => {
+      const m = e.detail;
+      setFolder('inbox');
+      setSelected(m);
     };
     socket.on('mail:new', onNew);
     window.addEventListener('mail:banner', onBanner);
+    window.addEventListener('mail:open', onOpenFromOS);
     return () => {
       socket.off('mail:new', onNew);
       window.removeEventListener('mail:banner', onBanner);
+      window.removeEventListener('mail:open', onOpenFromOS);
     };
   }, [folder]);
 
@@ -149,16 +169,43 @@ export default function App() {
         <div style={styles.tools}>
           <button style={styles.btnPrimary} onClick={() => setComposing(true)}>Compose</button>
           <button style={styles.btn} onClick={async () => { await syncInbox().catch(() => {}); reload(); }} disabled={!online}>Sync</button>
+          <div style={styles.priorityGroup} title="Simulate an incoming message of this priority">
+            <button style={{ ...styles.prioBtn, ...styles.prioHigh }} disabled={!online}
+              onClick={async () => { await syncInbox('high').catch(() => {}); reload(); }}>● High</button>
+            <button style={{ ...styles.prioBtn, ...styles.prioMed }} disabled={!online}
+              onClick={async () => { await syncInbox('medium').catch(() => {}); reload(); }}>● Med</button>
+            <button style={{ ...styles.prioBtn, ...styles.prioLow }} disabled={!online}
+              onClick={async () => { await syncInbox('low').catch(() => {}); reload(); }}>○ Low</button>
+          </div>
           <button style={styles.btn} onClick={onToggleOffline}>
             {online ? '🟢 Online' : '🔴 Offline'}
           </button>
         </div>
       </header>
 
-      {banner && (
-        <Banner priority={banner.priority} message={banner.message}
-          onOpen={() => { setFolder('inbox'); setSelected(banner.message); setBanner(null); }}
-          onDismiss={() => setBanner(null)} />
+      {banners.length > 0 && (
+        <div>
+          {banners.map((b) => (
+            <Banner
+              key={b.id}
+              priority={b.priority}
+              message={b.message}
+              summary={b.summary}
+              onOpen={() => {
+                setFolder('inbox');
+                const target = b.message || (b.summary && b.summary.messages[0]);
+                if (target) setSelected(target);
+                dismissBanner(b.id);
+              }}
+              onDismiss={() => dismissBanner(b.id)}
+            />
+          ))}
+          {banners.length === 3 && (
+            <div style={{ padding: '4px 16px', fontSize: 12, color: '#6b7280', background: '#f9fafb' }}>
+              Showing 3 most recent. Older notifications collapsed into badge.
+            </div>
+          )}
+        </div>
       )}
 
       <div style={styles.body}>
@@ -183,8 +230,13 @@ const styles = {
   topbar: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#0078d4', color: '#fff' },
   brand: { fontWeight: 700, fontSize: 18 },
   search: { flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 14 },
-  tools: { display: 'flex', gap: 8 },
+  tools: { display: 'flex', gap: 8, alignItems: 'center' },
   btn: { padding: '6px 12px', border: 'none', borderRadius: 6, background: '#ffffff22', color: '#fff', cursor: 'pointer', fontWeight: 600 },
   btnPrimary: { padding: '6px 14px', border: 'none', borderRadius: 6, background: '#fff', color: '#0078d4', cursor: 'pointer', fontWeight: 700 },
+  priorityGroup: { display: 'flex', gap: 4, padding: '2px 4px', background: '#ffffff18', borderRadius: 6 },
+  prioBtn: { padding: '4px 10px', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12 },
+  prioHigh: { background: '#dc2626' },
+  prioMed: { background: '#2563eb' },
+  prioLow: { background: '#6b7280' },
   body: { flex: 1, display: 'grid', gridTemplateColumns: '200px 360px 1fr', minHeight: 0 },
 };

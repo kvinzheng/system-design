@@ -30,4 +30,5 @@ export const deleteMessage = (id) =>
 export const sendMessage = (msg) =>
   client.post('/messages/send', msg).then((r) => r.data);
 
-export const syncInbox = () => client.post('/messages/sync').then((r) => r.data);
+export const syncInbox = (priority) =>
+  client.post('/messages/sync', null, { params: priority ? { priority } : {} }).then((r) => r.data);
