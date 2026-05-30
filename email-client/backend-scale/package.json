@@ -1,0 +1,25 @@
+{
+  "name": "email-client-backend-scale",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "topics:create": "node ./scripts/createTopics.js",
+    "dev:producer": "node ./producer/server.js",
+    "dev:fanout":   "node ./fanout/worker.js",
+    "dev:gateway":  "GATEWAY_ID=g1 PORT=4101 node ./gateway/server.js",
+    "dev:all":      "npm run topics:create && concurrently -k -n PROD,FAN,GW -c blue,magenta,green \"npm:dev:producer\" \"npm:dev:fanout\" \"npm:dev:gateway\""
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "kafkajs": "^2.2.4",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
