@@ -10,6 +10,8 @@ import Reader from './components/Reader';
 import Sidebar from './components/Sidebar';
 import Banner from './components/Banner';
 import OverflowPill from './components/OverflowPill';
+import SettingsPopover from './components/SettingsPopover';
+import { getPrefs, setPrefs, subscribePrefs } from './prefs';
 
 const FOLDERS = ['inbox', 'sent', 'drafts', 'outbox', 'trash'];
 
@@ -24,6 +26,10 @@ export default function App() {
   const [online, setOnline] = useState(isOnline());
   const [composing, setComposing] = useState(false);
   const [stack, setStack] = useState({ visible: [], overflow: [], maxVisible: 3 });
+  const [prefs, setPrefsState] = useState(getPrefs());
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => subscribePrefs(setPrefsState), []);
 
   const refreshOnlineState = () => setOnline(isOnline());
 
@@ -172,8 +178,24 @@ export default function App() {
           <button style={styles.btn} onClick={onToggleOffline}>
             {online ? '🟢 Online' : '🔴 Offline'}
           </button>
+          <button
+            style={{ ...styles.btn, ...(prefs.focusMode ? styles.btnActive : null) }}
+            onClick={() => setPrefs({ focusMode: !prefs.focusMode })}
+            title="Focus mode — only high-priority alerts interrupt"
+          >
+            {prefs.focusMode ? '🌙 Focus' : '☀️ Normal'}
+          </button>
+          <button
+            style={styles.btn}
+            onClick={() => setShowSettings((v) => !v)}
+            title="Notification preferences"
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
         </div>
       </header>
+      {showSettings && <SettingsPopover onClose={() => setShowSettings(false)} />}
 
       {stack.visible.length > 0 && (
         <div>
@@ -223,6 +245,7 @@ const styles = {
   search: { flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', fontSize: 14 },
   tools: { display: 'flex', gap: 8, alignItems: 'center' },
   btn: { padding: '6px 12px', border: 'none', borderRadius: 6, background: '#ffffff22', color: '#fff', cursor: 'pointer', fontWeight: 600 },
+  btnActive: { background: '#fbbf24', color: '#111' },
   btnPrimary: { padding: '6px 14px', border: 'none', borderRadius: 6, background: '#fff', color: '#0078d4', cursor: 'pointer', fontWeight: 700 },
   priorityGroup: { display: 'flex', gap: 4, padding: '2px 4px', background: '#ffffff18', borderRadius: 6 },
   prioBtn: { padding: '4px 10px', border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 12 },

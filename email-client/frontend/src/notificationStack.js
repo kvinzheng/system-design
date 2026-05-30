@@ -2,13 +2,13 @@
 //
 // Responsibilities:
 //  - Group incoming banners by (sender, thread) before stacking
-//  - Cap visible banners dynamically by viewport
+//  - Cap visible banners dynamically by viewport AND user density preference
 //  - Priority-weighted eviction: requiresAction > high > medium > low,
 //    age as tiebreaker; never evict requiresAction
 //  - Time-based aging with TTL per tier; hover pauses the timer
 //  - Overflow surface: evicted/aged banners move to `overflow[]`
 //    until user clears them or 24h passes
-//  - Context awareness: Focus / screen-share / reduced-motion shrink cap
+//  - Context awareness: Focus mode / quiet hours / reduced-motion shrink behavior
 //
 // Public API:
 //   addBanner(detail)               -> id
@@ -16,6 +16,8 @@
 //   pauseAging(id) / resumeAging(id)
 //   subscribe(listener)             -> unsubscribe()
 //   getState()                      -> { visible, overflow, maxVisible }
+
+import { getPrefs, densityCap, isInQuietHours, subscribePrefs } from './prefs';
 
 const TTL_MS = { high: Infinity, medium: 5000, low: 0 }; // low never enters stack
 const BANNER_HEIGHT_PX = 64;
@@ -39,12 +41,33 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
+// React to user prefs changes (Focus / density / quiet hours) by re-enforcing
+// the cap. Any visible banner over the new cap evicts to overflow.
+subscribePrefs(() => {
+  const cap = maxBanners();
+  let changed = false;
+  while (visible.length > cap) {
+    let victimIdx = 0, victimScore = Infinity;
+    for (let i = 0; i < visible.length; i++) {
+      const s = evictionScore(visible[i]);
+      if (s < victimScore) { victimScore = s; victimIdx = i; }
+    }
+    const [victim] = visible.splice(victimIdx, 1);
+    overflow.unshift(victim);
+    changed = true;
+  }
+  // Always notify so subscribers re-render maxVisible
+  if (changed || listeners.size) notify();
+});
+
 export function getState() {
   return { visible: [...visible], overflow: [...overflow], maxVisible: maxBanners() };
 }
 
 export function maxBanners() {
   if (typeof window === 'undefined') return 3;
+  const prefs = getPrefs();
+  if (prefs.focusMode) return 1; // focus: only one banner ever, reserved for high
   const viewport = window.innerHeight || 800;
   let cap = Math.floor((viewport * VIEWPORT_FRACTION) / BANNER_HEIGHT_PX);
   try {
@@ -52,6 +75,7 @@ export function maxBanners() {
       cap = Math.min(cap, 1);
     }
   } catch {}
+  cap = Math.min(cap, densityCap(prefs.density));
   return Math.max(1, Math.min(cap, 5));
 }
 
@@ -78,8 +102,13 @@ export function addBanner(detail) {
   // Low priority never enters the banner stack — badge only.
   if (detail.priority === 'low') return null;
 
+  const prefs = getPrefs();
+  // Focus mode / quiet hours: medium goes straight to overflow silently.
+  const suppressMedium = (prefs.focusMode || isInQuietHours(prefs)) && detail.priority !== 'high';
+
   const groupKey = detail.groupKey || groupKeyFor(detail);
-  const existing = visible.find((b) => b.groupKey === groupKey);
+  const targetArr = suppressMedium ? overflow : visible;
+  const existing = targetArr.find((b) => b.groupKey === groupKey);
 
   if (existing) {
     // Coalesce into the existing banner in the same group
@@ -105,6 +134,13 @@ export function addBanner(detail) {
     paused: false,
     ttlRemaining: TTL_MS[detail.priority],
   };
+
+  if (suppressMedium) {
+    overflow.unshift(banner);
+    notify();
+    ensureAgingLoop();
+    return banner.id;
+  }
 
   visible.push(banner);
 
