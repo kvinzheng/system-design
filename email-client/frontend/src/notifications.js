@@ -10,6 +10,8 @@
 // Bursts are flushed every 500ms so 12 messages arriving back-to-back
 // produce 1–2 banners, not 12 stacked toasts.
 
+import { addBanner } from './notificationStack';
+
 const FLUSH_MS = 500;
 const HIGH_SOUND_DEBOUNCE_MS = 1500;
 
@@ -80,9 +82,7 @@ function flush() {
   // HIGH: one banner per message (persistent), one OS push per message,
   // one debounced sound for the whole burst.
   for (const m of high) {
-    window.dispatchEvent(new CustomEvent('mail:banner', {
-      detail: { id: `high:${m.id}`, priority: 'high', message: m, persistent: true },
-    }));
+    addBanner({ priority: 'high', message: m, persistent: true });
     osNotify({
       title: `⭐ ${m.fromName || m.fromAddress}`,
       body: `${m.subject}\n${(m.body || '').slice(0, 120)}`,
@@ -96,22 +96,17 @@ function flush() {
   // MEDIUM: coalesce. 1 message → personal banner. N messages → summary banner.
   if (medium.length === 1) {
     const m = medium[0];
-    window.dispatchEvent(new CustomEvent('mail:banner', {
-      detail: { id: `med:${m.id}`, priority: 'medium', message: m, autoDismissMs: 5000 },
-    }));
+    addBanner({ priority: 'medium', message: m });
     osNotify({ title: m.fromName || m.fromAddress, body: m.subject, tag: m.id, silent: true, openMessage: m });
   } else if (medium.length > 1) {
-    const id = `med:burst:${Date.now()}`;
-    window.dispatchEvent(new CustomEvent('mail:banner', {
-      detail: {
-        id, priority: 'medium', autoDismissMs: 5000,
-        summary: { count: medium.length, messages: medium },
-      },
-    }));
+    addBanner({
+      priority: 'medium',
+      summary: { count: medium.length, messages: medium },
+    });
     osNotify({
       title: `${medium.length} new messages`,
       body: medium.slice(0, 3).map((m) => m.subject).join(' · '),
-      tag: id,
+      tag: `burst:${Date.now()}`,
       silent: true,
       openMessage: medium[0],
     });

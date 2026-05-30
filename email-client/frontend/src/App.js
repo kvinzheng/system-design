@@ -3,11 +3,13 @@ import { listMessages, patchMessage, deleteMessage, syncInbox, isOnline, isForce
 import { socket } from './socket';
 import { getOutbox, flushOutbox } from './outbox';
 import { ensureNotificationPermission, notifyNewMail } from './notifications';
+import { subscribe as subscribeStack, dismissBanner, clearOverflow, pauseAging, resumeAging } from './notificationStack';
 import Composer from './components/Composer';
 import MessageList from './components/MessageList';
 import Reader from './components/Reader';
 import Sidebar from './components/Sidebar';
 import Banner from './components/Banner';
+import OverflowPill from './components/OverflowPill';
 
 const FOLDERS = ['inbox', 'sent', 'drafts', 'outbox', 'trash'];
 
@@ -21,11 +23,9 @@ export default function App() {
   const [outboxCount, setOutboxCount] = useState(getOutbox().length);
   const [online, setOnline] = useState(isOnline());
   const [composing, setComposing] = useState(false);
-  const [banners, setBanners] = useState([]); // stack of {id, priority, message?, summary?, persistent?}
+  const [stack, setStack] = useState({ visible: [], overflow: [], maxVisible: 3 });
 
   const refreshOnlineState = () => setOnline(isOnline());
-
-  const dismissBanner = (id) => setBanners((prev) => prev.filter((b) => b.id !== id));
 
   // Load whenever folder or query changes
   const reload = async () => {
@@ -90,35 +90,27 @@ export default function App() {
         setMessages((prev) => (prev.some((p) => p.id === msg.id) ? prev : [msg, ...prev]));
       }
     };
-    const onBanner = (e) => {
-      const detail = e.detail;
-      setBanners((prev) => {
-        // Cap stack at 3; drop oldest non-persistent first, else oldest.
-        let next = [...prev, detail];
-        if (next.length > 3) {
-          const dropIdx = next.findIndex((b) => !b.persistent);
-          next.splice(dropIdx >= 0 ? dropIdx : 0, 1);
-        }
-        return next;
-      });
-      if (detail.autoDismissMs) {
-        setTimeout(() => dismissBanner(detail.id), detail.autoDismissMs);
-      }
-    };
     const onOpenFromOS = (e) => {
       const m = e.detail;
       setFolder('inbox');
       setSelected(m);
     };
     socket.on('mail:new', onNew);
-    window.addEventListener('mail:banner', onBanner);
     window.addEventListener('mail:open', onOpenFromOS);
+    const unsubscribe = subscribeStack(setStack);
     return () => {
       socket.off('mail:new', onNew);
-      window.removeEventListener('mail:banner', onBanner);
       window.removeEventListener('mail:open', onOpenFromOS);
+      unsubscribe();
     };
   }, [folder]);
+
+  const openBanner = (b) => {
+    setFolder('inbox');
+    const target = b.message || (b.summary && b.summary.messages[0]);
+    if (target) setSelected(target);
+    dismissBanner(b.id);
+  };
 
   const onSelect = async (m) => {
     setSelected(m);
@@ -183,30 +175,29 @@ export default function App() {
         </div>
       </header>
 
-      {banners.length > 0 && (
+      {stack.visible.length > 0 && (
         <div>
-          {banners.map((b) => (
+          {stack.visible.map((b) => (
             <Banner
               key={b.id}
               priority={b.priority}
-              message={b.message}
+              message={b.message || b.latestMessage}
               summary={b.summary}
-              onOpen={() => {
-                setFolder('inbox');
-                const target = b.message || (b.summary && b.summary.messages[0]);
-                if (target) setSelected(target);
-                dismissBanner(b.id);
-              }}
+              count={b.count}
+              onOpen={() => openBanner(b)}
               onDismiss={() => dismissBanner(b.id)}
+              onMouseEnter={() => pauseAging(b.id)}
+              onMouseLeave={() => resumeAging(b.id)}
             />
           ))}
-          {banners.length === 3 && (
-            <div style={{ padding: '4px 16px', fontSize: 12, color: '#6b7280', background: '#f9fafb' }}>
-              Showing 3 most recent. Older notifications collapsed into badge.
-            </div>
-          )}
         </div>
       )}
+      <OverflowPill
+        items={stack.overflow}
+        onOpen={openBanner}
+        onDismiss={dismissBanner}
+        onClearAll={clearOverflow}
+      />
 
       <div style={styles.body}>
         <Sidebar folders={FOLDERS} active={folder} counts={folderCounts} onSelect={setFolder} />
